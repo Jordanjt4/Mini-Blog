@@ -1,0 +1,263 @@
+{{! Use the main layout }}
+{{!< main }}
+
+<div id="confirmation-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>Are you sure you want to delete your account?</h2>
+        <p>This action cannot be undone and will delete all your posts and likes.</p>
+        <button id="confirm-delete" class="confirm-button">Yes, delete my account</button>
+        <button id="cancel-delete" class="cancel-button">Cancel</button>
+    </div>
+</div>
+
+<div id="change-username-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>Change Username</h2>
+        <form id="change-username-form">
+            <label for="new-username">New Username:</label>
+            <input type="text" id="new-username" name="new-username" value="{{user.username}}">
+            <button type="submit" class="confirm-button">Change Username</button>
+            <p id="username-error" class="error-message"></p>
+        </form>
+    </div>
+</div>
+
+<div class="profile-container">
+    <div class="profile-avatar">
+        <!-- Display user's profile image -->
+        <img class="profile-avatar" src="/avatar/{{user.username}}" alt="User Avatar">
+    </div>
+    
+    <section class="profile-info">
+        <!-- Display user profile information -->
+        <h2>User Profile</h2>
+        <p> <span class="bold "> Username: </span> {{user.username}}</p>
+        <p> <span class="bold"> Member since: </span> {{user.memberSince}}</p>
+        <div class="username-container">
+            <button id="delete-account-button" class="delete-account-button">Delete Account</button>
+            <button id="change-username-button" class="change-username-button">Change Username</button>
+        </div>
+        <!-- Add more profile information as needed -->
+    </section>
+</div>
+
+<div class="content-container">
+    <div class="gridItem1">
+        <!-- show the create post form -->
+        <section class="post-form">
+            <h1 class="create-post-header">Create new post!</h1>
+            <form action="/posts" method="POST">
+                <div class="create-post-container">
+                    <textarea id="post-title" cols="50" name="title" placeholder="Title" maxlength="20" required></textarea>
+                    <textarea id="post-content" cols="50" rows="20" name="content" placeholder="What's on your mind {{user.username}}? Max Length: 500 char" maxlength="500" required></textarea>
+                </div>
+                <div class="button-row">
+                    <button type="button" class="emoji-button" onclick="toggleEmojiPanel()"><i class="fa-regular fa-face-smile"></i></button>
+                    <button type="submit" class="post-button">Post</button>
+                </div>
+            </form>
+
+            <div id="emoji-container" class="emoji-panel">
+                <textarea id="emoji-search" cols="50" rows="1" name="filter-emojis" oninput="searchEmojis()" placeholder="search for emojis..."></textarea>
+                <div id="emoji-grid"></div>
+            </div>
+        </section>
+    </div>
+
+    <div class="gridItem2">
+        <section class="user-posts">
+            <h2>Your {{{postNeoType}}}s</h2>
+            
+            {{#if currUser.length}}
+                <div class="posts-list">
+                    <ul>
+                        {{#each currUser}}
+                            <li class="post">
+                                <div class="post-avatar">
+                                    <img class="avatar" src="/avatar/{{this.username}}" alt="{{this.username}}'s Avatar">
+                                </div>
+                                <div class="post-content preserve-newlines">
+                                    <a class="spanTitle">{{this.title}}</a>
+                                    <p class="spanPosted">Posted By: {{this.username}} on {{this.timestamp}}</p>
+                                    <p class="spanContent">{{this.content}}</p>
+                                    <div class="post-status-bar">
+                                        <div class="span-desc">
+                                            <div class="like-delete">
+                                                <i onclick="handleDeleteClick(event)" data-id="{{this.id}}" class="fa-solid fa-trash delete-button"></i>
+                                                <p id="like-counter-{{this.id}}"> {{this.likes}} likes </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="reactions-list" id="reactions-list-{{this.id}}">
+                                    {{#each this.reactions}}
+                                    <span>{{this.emoji}}: {{this.count}}</span>
+                                    {{/each}}
+                                </div>
+                            </li>
+                        {{/each}}
+                    </ul>
+                </div>
+            {{else}}
+                <p class="not-posted">You have not posted yet.</p>
+            {{/if}}
+        </section>
+    </div>
+</div>
+
+<script>
+// show and close the delete and change username modals
+document.getElementById('delete-account-button').onclick = function() {
+    document.getElementById('confirmation-modal').style.display = 'block';
+};
+
+document.getElementById('change-username-button').onclick = function() {
+    document.getElementById('change-username-modal').style.display = 'block';
+};
+
+document.querySelectorAll('.close-button').forEach(button => {
+    button.onclick = function() {
+        document.querySelectorAll('.modal').forEach(modal => modal.style.display = 'none');
+    }
+});
+
+document.getElementById('cancel-delete').onclick = function() {
+    document.getElementById('confirmation-modal').style.display = 'none';
+};
+
+document.getElementById('confirm-delete').onclick = async function() {
+    try {
+        // post request to the server 
+        let response = await fetch(`/deleteAccount`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        let data = await response.json();
+
+        if (data.status === 'success') {
+            window.location.href = '/';
+        } else {
+            console.error('Failed to delete account');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+};
+
+document.getElementById('change-username-form').onsubmit = async function(event) {
+    event.preventDefault();
+    const newUsername = document.getElementById('new-username').value;
+    const errorElement = document.getElementById('username-error');
+
+    // Client-side validation
+    if (!newUsername || newUsername.trim() === '') {
+        errorElement.textContent = 'Username cannot be empty';
+        return;
+    }
+
+    // post request to the server
+    try {
+        let response = await fetch(`/changeUsername`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ newUsername })
+        });
+
+        let data = await response.json();
+
+        if (data.status === 'success') {
+            document.getElementById('change-username-modal').style.display = 'none';
+            errorElement.textContent = '';
+            window.location.reload();
+        } else {
+            errorElement.textContent = data.error;
+        }
+    } catch (error) {
+        errorElement.textContent = 'Server error';
+        console.error('Error:', error);
+    }
+};
+
+let allEmojis = [];  // Global list to hold all emojis
+
+function toggleEmojiPanel() {
+    const container = document.getElementById('emoji-container');
+    const displayStyle = container.style.display;
+
+    if (displayStyle === 'none' || displayStyle === '') {
+        container.style.display = 'block';
+        fetch(`https://emoji-api.com/emojis?access_key=${accessToken}`)
+            .then(response => response.json())
+            .then(data => {
+                allEmojis = data;  // Store emojis in global list
+                displayEmojis(data);
+            })
+            .catch(error => console.error('Error fetching emojis:', error));
+    } else {
+        container.style.display = 'none';
+    }
+}
+
+function displayEmojis(emojis, limit = 200) {
+    const container = document.getElementById('emoji-grid');
+    container.innerHTML = '';
+    if (Array.isArray(emojis) && emojis.length > 0) {
+        // only process the subset of emojis that actaully show
+        emojis.slice(0, limit).forEach(emoji => {
+            const emojiElement = document.createElement('span');
+            emojiElement.textContent = emoji.character;
+            emojiElement.onclick = () => insertEmoji(emoji.character);
+            container.appendChild(emojiElement);
+        });
+    } else {
+        container.textContent = 'No emojis found. Try a different search!';
+    }
+}
+
+// display all emojis whose names match what you typed so far
+function searchEmojis() {
+    const searchTerm = document.getElementById('emoji-search').value.toLowerCase();
+    const filteredEmojis = allEmojis.filter(emoji => emoji.unicodeName.toLowerCase().includes(searchTerm));
+    displayEmojis(filteredEmojis);
+}
+
+// insert emoji into the post-content once clicked
+function insertEmoji(emoji) {
+    const postcontent = document.getElementById('post-content');
+    postcontent.value += emoji;
+    postcontent.focus();
+}
+
+// delete a post
+async function handleDeleteClick(event) {
+    const buttonElement = event.target.closest('.delete-button');
+    const postId = buttonElement.getAttribute('data-id');        
+
+    try {
+        let response = await fetch(`/delete/${postId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        let data = await response.json();
+
+        if (data.status === 'success') {
+            window.location.reload();
+        } else {
+            console.error('Failed to delete post');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+</script>

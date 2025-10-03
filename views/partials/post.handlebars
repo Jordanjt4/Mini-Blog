@@ -1,0 +1,185 @@
+{{! Partial for a single post }}
+<div class="post">
+    <div class="post-avatar">
+        <img class="avatar post-avatar-only" src="/avatar/{{this.username}}" alt="User Avatar">
+    </div>
+    <div class="post-content preserve-newlines">
+        <!-- the post -->
+        <a class="spanTitle">{{this.title}}</a>
+        <p class="spanPosted">Posted By: {{this.username}} on {{this.timestamp}}</p>
+        <p class="spanContent">{{this.content}}</p>
+        <div class="post-status-bar">
+            <!-- everything that is shown in the status bar -->
+            <div class="span-desc">
+                <div class="like-delete">
+                    {{#isLoggedInAndOwner this.username}}
+                    <i onclick="handleDeleteClick(event)" data-id="{{this.id}}" class="fa-solid fa-trash delete-button"></i>
+                    {{else}}
+                    <i onclick="handleLikeClick(event)" data-id="{{this.id}}" class="fa-solid fa-heart like-button {{#if this.likedByCurrentUser}}liked{{/if}}"></i>
+                    {{/isLoggedInAndOwner}}
+                    <p id="like-counter-{{this.id}}">{{this.likes}} likes</p>
+                </div>
+            </div>
+        </div>
+        <div class="reactions">
+            <div class="reactions-list" id="reactions-list-{{this.id}}">
+                {{#each this.reactions}}
+                <span onclick="toggleReaction({{../this.id}}, '{{this.emoji}}')">{{this.count}} : {{this.emoji}}</span>
+                {{/each}}
+                {{#isLoggedInAndNotOwner this.username}}
+                <div onclick="toggleEmojiPanel({{this.id}})" class="fa-solid fa-face-smile reaction-button"></div>
+                {{/isLoggedInAndNotOwner}}
+            </div>
+            {{#isLoggedInAndNotOwner this.username}}
+            <div id="emoji-panel-{{this.id}}" class="emoji-panel">
+                <div class="emoji-panel-header">
+                    <textarea id="emoji-search-{{this.id}}" rows="1" oninput="searchEmojis({{this.id}})" placeholder="Search for emojis..."></textarea>
+                    <button onclick="closeEmojiPanel({{this.id}})">Close</button>
+                </div>
+                <div id="emoji-grids-{{this.id}}" class="emoji-grids"></div>
+            </div>
+            {{/isLoggedInAndNotOwner}}
+        </div>
+    </div>
+</div>
+
+<script>
+async function handleLikeClick(event) {
+    const buttonElement = event.target.closest('.like-button');
+    const postId = buttonElement.getAttribute('data-id');
+    const likeCounterID = document.querySelector(`#like-counter-${postId}`);
+
+    try {
+        let response = await fetch(`/like/${postId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        let data = await response.json();
+
+        if (data.status === 'success') {
+            buttonElement.classList.toggle('liked', data.action === 'liked');
+            likeCounterID.textContent = `${data.likeCounter} likes`;
+        } else {
+            console.error(data.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+async function handleDeleteClick(event) {
+    const buttonElement = event.target.closest('.delete-button');
+    const postId = buttonElement.getAttribute('data-id');        
+
+    try {
+        let response = await fetch(`/delete/${postId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        let data = await response.json();
+
+        if (data.status === 'success') {
+            window.location.reload();
+        } else {
+            console.error('Failed to delete post');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+async function reactToPost(postId, emoji) {
+    try {
+        let response = await fetch(`/react/${postId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ emoji })
+        });
+
+        let data = await response.json();
+
+        if (data.status === 'success') {
+            updateReactionsList(postId, data.reactions);
+        } else {
+            console.error(data.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+
+    function updateReactionsList(postId, reactions) {
+    const reactionsList = document.getElementById(`reactions-list-${postId}`);
+    reactionsList.innerHTML = reactions.map(reaction => `<span onclick="toggleReaction(${postId}, '${reaction.emoji}')">${reaction.count} : ${reaction.emoji}</span>`).join('');
+    const reactionButton = `<div onclick="toggleEmojiPanel(${postId})" class="fa-solid fa-face-smile reaction-button"></div>`;
+    reactionsList.innerHTML += reactionButton;
+}
+
+async function toggleReaction(postId, emoji) {
+    try {
+        let response = await fetch(`/react/${postId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ emoji })
+        });
+
+        let data = await response.json();
+
+        if (data.status === 'success') {
+            updateReactionsList(postId, data.reactions);
+        } else {
+            console.error(data.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+let allEmojis = [];  // Global list to hold all emojis
+
+function toggleEmojiPanel(postId) {
+    const panel = document.getElementById(`emoji-panel-${postId}`);
+    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    if (panel.style.display === 'block' && !panel.dataset.loaded) {
+        fetch(`https://emoji-api.com/emojis?access_key=${accessToken}`)
+            .then(response => response.json())
+            .then(data => {
+                allEmojis = data;
+                displayEmojis(postId, data);
+                panel.dataset.loaded = 'true'; // Mark this panel as loaded
+            })
+            .catch(error => console.error('Error fetching emojis:', error));
+    }
+}
+
+function closeEmojiPanel(postId) {
+    const panel = document.getElementById(`emoji-panel-${postId}`);
+    panel.style.display = 'none';
+}
+
+function searchEmojis(postId) {
+    const searchTerm = document.getElementById(`emoji-search-${postId}`).value.toLowerCase();
+    const filteredEmojis = allEmojis.filter(emoji => emoji.slug.includes(searchTerm));
+    displayEmojis(postId, filteredEmojis);
+}
+
+function displayEmojis(postId, emojis, limit = 200) {
+    const grid = document.getElementById(`emoji-grids-${postId}`);
+    grid.innerHTML = '';
+    emojis.slice(0, limit).forEach(emoji => {
+        const span = document.createElement('span');
+        span.textContent = emoji.character;
+        span.onclick = () => reactToPost(postId, emoji.character);
+        grid.appendChild(span);
+    });
+}
+}

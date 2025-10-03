@@ -1,0 +1,14 @@
+{{! Use the main layout }}
+{{!< main }}
+
+<section class="login">
+    <section class = "login-area">
+        <h2>Login with Google</h2>
+        <!-- errors will appear here -->
+        {{#if loginError}}
+            <p style="color: red;">{{loginError}}</p>
+        {{/if}}
+        <form action="/google" method="GET">
+            <button class="button-auth" type="submit">Login with Google</button>
+        </form>
+    </section>
